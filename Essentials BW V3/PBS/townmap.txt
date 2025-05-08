@@ -1,0 +1,12 @@
+[0]
+Name=
+Filename=mapRegion0.png
+Point=10,14,Kleini Town,,33,13,14,
+Point=11,14,Route 1,,,,,
+Point=12,14,Route 1,,,,,
+Point=12,13,Route 1,,,,,
+Point=12,12,Lila City,,,,,
+[1]
+Name=
+Filename=mapRegion1.png
+Point=13,16,Here,,,,,

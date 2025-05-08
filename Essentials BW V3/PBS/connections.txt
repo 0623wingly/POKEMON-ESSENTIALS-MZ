@@ -1,0 +1,10 @@
+# Lila City (4) - Kleini Town (33)
+4,West,54,33,East,0
+# Route 1 (43) - Kleini Town (33)
+43,West,15,33,East,0
+# Lila City (4) - Route 2 (8)
+4,East,0,8,West,0
+# Route 1 (43) - Route 2 (8)
+43,North,36,8,South,0
+# Route 1 (43) - Lila City (4)
+43,North,0,4,South,0
