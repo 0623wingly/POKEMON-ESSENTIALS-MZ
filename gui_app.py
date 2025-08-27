@@ -1,9 +1,7 @@
-# gui_app.py — PBS Editor main GUI (v1.5)
-# ステップ3（⑥＋⑧）:
-# - BaseStats を Spinbox 化（1–255, step=1）
-# - EVs を Spinbox 化（0–3, step=1）
-# - Happiness を Spinbox 化（0–255, step=10）
-#  入力値はフォーカスアウト/Enterで自動クリップ
+# gui_app.py — PBS Editor main GUI (v1.5.1)
+# 変更点(v1.5.1):
+# - すべての Entry/Combobox を Big スタイルに統一（BOX_FONT_SIZE が反映）
+# - v1.5 のスピン導入（BaseStats/EVs/Happiness）は維持
 
 import os
 import tkinter as tk
@@ -14,14 +12,14 @@ from pbs_utils import (
 )
 from widgets.rows import (
     row_text, row_number, row_combo, row_two_combos, row_stats,
-    row_spin, row_stats_spin
+    row_spin, row_stats_spin, BOX_FONT_FAMILY, BOX_FONT_SIZE
 )
 from widgets.moves_dialog import MovesDialog
 from widgets.evo_dialog import EvoDialog
 
-APP_TITLE = "PBS Editor v3.8 (split) — v1.5 (Spinners for BaseStats/EVs/Happiness)"
+APP_TITLE = "PBS Editor v3.8 (split) — v1.5.1 (Spin + unified BOX_FONT_SIZE styles)"
 
-# （v1.4 と同じマスターデータ＆マッピングをそのまま再掲）
+# ===== マスターデータ（日本語表示・保存はID） =====
 TYPES = [
     ("", "—"),
     ("NORMAL","ノーマル"),("FIGHTING","かくとう"),("POISON","どく"),("GROUND","じめん"),
@@ -167,7 +165,7 @@ class App(tk.Tk):
         frm, _ = row_spin(self.form, "Happiness", self.v_happy, mn=0, mx=255, step=10)
         frm.pack(fill=tk.X, padx=8, pady=6)
 
-        # Abilities（次ステップでコンボ化予定）
+        # Abilities（v1.6で選択式に予定）
         self.v_abilities = tk.StringVar(); self._pack_row_text("Abilities", self.v_abilities)
         self.v_hidden = tk.StringVar();    self._pack_row_text("HiddenAbilities", self.v_hidden)
         self.v_unique = tk.StringVar();    self._pack_row_text("UniqueAbilities", self.v_unique)
@@ -187,31 +185,37 @@ class App(tk.Tk):
         # HatchSteps
         self.v_hatch = tk.StringVar(); self._pack_row_number("HatchSteps", self.v_hatch)
 
-        # Incense / Offspring
+        # Incense / Offspring（Bigスタイル適用）
         row = ttk.Frame(self.form); row.pack(fill=tk.X, padx=8, pady=6)
         ttk.Label(row, text="Incense").grid(row=0, column=0, sticky="e", padx=(0,8))
-        self.v_incense = tk.StringVar(); self.cb_incense = ttk.Combobox(row, textvariable=self.v_incense, state="normal", width=30, values=[])
+        self.v_incense = tk.StringVar(); self.cb_incense = ttk.Combobox(row, textvariable=self.v_incense, state="normal", width=30, values=[], style="Big.TCombobox",
+    font=(BOX_FONT_FAMILY, BOX_FONT_SIZE))
         self.cb_incense.grid(row=0, column=1, sticky="we")
         ttk.Label(row, text="Offspring").grid(row=0, column=2, sticky="e", padx=(18,8))
-        self.v_offspring = tk.StringVar(); self.cb_offspring = ttk.Combobox(row, textvariable=self.v_offspring, state="normal", width=35, values=[])
+        self.v_offspring = tk.StringVar(); self.cb_offspring = ttk.Combobox(row, textvariable=self.v_offspring, state="normal", width=35, values=[], style="Big.TCombobox",
+    font=(BOX_FONT_FAMILY, BOX_FONT_SIZE))
         self.cb_offspring.grid(row=0, column=3, sticky="we")
         row.grid_columnconfigure(1, weight=1); row.grid_columnconfigure(3, weight=1)
 
-        # Height / Weight
+        # Height / Weight（Bigスタイル適用）
         row = ttk.Frame(self.form); row.pack(fill=tk.X, padx=8, pady=6)
         ttk.Label(row, text="Height").grid(row=0, column=0, sticky="e", padx=(0,8))
-        self.v_height = tk.StringVar(); ttk.Entry(row, textvariable=self.v_height).grid(row=0, column=1, sticky="we")
+        self.v_height = tk.StringVar(); ttk.Entry(row, textvariable=self.v_height, style="Big.TEntry",
+    font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)).grid(row=0, column=1, sticky="we")
         ttk.Label(row, text="Weight").grid(row=0, column=2, sticky="e", padx=(18,8))
-        self.v_weight = tk.StringVar(); ttk.Entry(row, textvariable=self.v_weight).grid(row=0, column=3, sticky="we")
+        self.v_weight = tk.StringVar(); ttk.Entry(row, textvariable=self.v_weight, style="Big.TEntry",
+    font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)).grid(row=0, column=3, sticky="we")
         row.grid_columnconfigure(1, weight=1); row.grid_columnconfigure(3, weight=1)
 
-        # Color / Shape
+        # Color / Shape（Bigスタイル適用）
         row = ttk.Frame(self.form); row.pack(fill=tk.X, padx=8, pady=6)
         ttk.Label(row, text="Color").grid(row=0, column=0, sticky="e", padx=(0,8))
-        self.v_color = tk.StringVar(); self.cb_color = ttk.Combobox(row, textvariable=self.v_color, state="readonly", values=[jp for _, jp in COLORS], width=28)
+        self.v_color = tk.StringVar(); self.cb_color = ttk.Combobox(row, textvariable=self.v_color, state="readonly", values=[jp for _, jp in COLORS], width=28, style="Big.TCombobox",
+    font=(BOX_FONT_FAMILY, BOX_FONT_SIZE))
         self.cb_color.grid(row=0, column=1, sticky="we")
         ttk.Label(row, text="Shape").grid(row=0, column=2, sticky="e", padx=(18,8))
-        self.v_shape = tk.StringVar(); self.cb_shape = ttk.Combobox(row, textvariable=self.v_shape, state="readonly", values=[jp for _, jp in SHAPES], width=28)
+        self.v_shape = tk.StringVar(); self.cb_shape = ttk.Combobox(row, textvariable=self.v_shape, state="readonly", values=[jp for _, jp in SHAPES], width=28, style="Big.TCombobox",
+    font=(BOX_FONT_FAMILY, BOX_FONT_SIZE))
         self.cb_shape.grid(row=0, column=3, sticky="we")
         row.grid_columnconfigure(1, weight=1); row.grid_columnconfigure(3, weight=1)
 
@@ -230,18 +234,23 @@ class App(tk.Tk):
         # Flags
         self.v_flags = tk.StringVar(); self._pack_row_text("Flags", self.v_flags)
 
-        # Wild items
-        self.v_wild_c = tk.StringVar(); self.cb_wild_c = ttk.Combobox(self.form, textvariable=self.v_wild_c, state="normal"); self._pack_row_inline("WildItemCommon", self.cb_wild_c)
-        self.v_wild_u = tk.StringVar(); self.cb_wild_u = ttk.Combobox(self.form, textvariable=self.v_wild_u, state="normal"); self._pack_row_inline("WildItemUncommon", self.cb_wild_u)
-        self.v_wild_r = tk.StringVar(); self.cb_wild_r = ttk.Combobox(self.form, textvariable=self.v_wild_r, state="normal"); self._pack_row_inline("WildItemRare", self.cb_wild_r)
+        # Wild items（Bigスタイル適用）
+        self.v_wild_c = tk.StringVar(); self.cb_wild_c = ttk.Combobox(self.form, textvariable=self.v_wild_c, state="normal", style="Big.TCombobox",
+    font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)); self._pack_row_inline("WildItemCommon", self.cb_wild_c)
+        self.v_wild_u = tk.StringVar(); self.cb_wild_u = ttk.Combobox(self.form, textvariable=self.v_wild_u, state="normal", style="Big.TCombobox",
+    font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)); self._pack_row_inline("WildItemUncommon", self.cb_wild_u)
+        self.v_wild_r = tk.StringVar(); self.cb_wild_r = ttk.Combobox(self.form, textvariable=self.v_wild_r, state="normal", style="Big.TCombobox",
+    font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)); self._pack_row_inline("WildItemRare", self.cb_wild_r)
 
         # 進化
         evofrm = ttk.Frame(self.form); evofrm.pack(anchor="w", padx=8, pady=6)
         ttk.Button(evofrm, text="進化を編集…", command=self.edit_evolutions).pack(side=tk.LEFT)
 
-        # Rival / SOS / Rate
-        self.v_rival = tk.StringVar(); self.cb_rival = ttk.Combobox(self.form, textvariable=self.v_rival, state="normal"); self._pack_row_inline("RivalSpecies", self.cb_rival)
-        self.v_soss  = tk.StringVar(); self.cb_soss  = ttk.Combobox(self.form, textvariable=self.v_soss,  state="normal"); self._pack_row_inline("SpeciesSOS", self.cb_soss)
+        # Rival / SOS / Rate（Bigスタイル適用）
+        self.v_rival = tk.StringVar(); self.cb_rival = ttk.Combobox(self.form, textvariable=self.v_rival, state="normal", style="Big.TCombobox",
+    font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)); self._pack_row_inline("RivalSpecies", self.cb_rival)
+        self.v_soss  = tk.StringVar(); self.cb_soss  = ttk.Combobox(self.form, textvariable=self.v_soss,  state="normal", style="Big.TCombobox",
+    font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)); self._pack_row_inline("SpeciesSOS", self.cb_soss)
         self.v_sosrate = tk.StringVar(); self._pack_row_number("CallRateSOS", self.v_sosrate)
 
         # ツールバー
