@@ -1,100 +1,99 @@
-# gui_app.py — PBS Editor main GUI (v1.2)
-# 依存: pbs_utils.py, widgets/rows.py, widgets/moves_dialog.py, widgets/evo_dialog.py
+# gui_app.py — PBS Editor main GUI (v1.4)
+# ステップ7: 選択肢は日本語表記のみ（値一覧は jp のみを渡す）
+# - Types / GenderRatio / GrowthRate / EggGroups / Color / Shape / Habitat は
+#   コンボの values が日本語だけになるように統一。
+# - 保存時は日本語→ID へ変換、読込時は ID→日本語 へ変換（既存ロジックを維持）。
 #
-# 変更点（v1.2）
-# - どこでもスクロール機能を廃止（右側スクロールバーのみ）
-# - フィールド順序を指定通りに並べ替え
-# - ShinyUnique を追加（rsc/abilities_shiny.txt を読み込み）
-# - Incense/Offspring、Height/Weight、Color/Shape を各1行にまとめ
-# - 選択式/入力式の方式を見直し（GenderRatio, GrowthRateなどコンボ）
-# - 進化ダイアログはメソッドに応じてパラメータUI切替（v1.1実装を継続）
+# 依存: pbs_utils.py, widgets/rows.py, widgets/moves_dialog.py, widgets/evo_dialog.py
 
 import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-from pbs_utils import parsePBS, stringify_section, replace_section_in_text
-from widgets.rows import row_text, row_number, row_combo, row_two_combos, row_stats
+from pbs_utils import (
+    parsePBS, stringify_section, replace_section_in_text
+)
+from widgets.rows import (
+    row_text, row_number, row_combo, row_two_combos, row_stats
+)
 from widgets.moves_dialog import MovesDialog
 from widgets.evo_dialog import EvoDialog
 
-APP_TITLE = "PBS Editor v3.8 (split) — v1.2"
+APP_TITLE = "PBS Editor v3.8 (split) — v1.4 (JP-only values)"
 
 # -----------------------------
-# マスターデータ（選択肢）
+# マスターデータ（id, jp）
 # -----------------------------
 TYPES = [
     ("", "—"),
-    ("NORMAL", "ノーマル"), ("FIGHTING", "かくとう"), ("POISON", "どく"),
-    ("GROUND", "じめん"), ("FLYING", "ひこう"), ("BUG", "むし"),
-    ("ROCK", "いわ"), ("GHOST", "ゴースト"), ("STEEL", "はがね"),
-    ("FIRE", "ほのお"), ("WATER", "みず"), ("ELECTRIC", "でんき"),
-    ("GRASS", "くさ"), ("ICE", "こおり"), ("PSYCHIC", "エスパー"),
-    ("DRAGON", "ドラゴン"), ("DARK", "あく"), ("FAIRY", "フェアリー"),
-    ("SOUND", "おと"), ("SAND", "すな"), ("FOSSIL", "かせき"),
-    ("WIND", "かぜ"), ("SNOW", "ゆき"), ("SHINE", "ひかり"),
-    ("SHADE", "やみ"), ("GOD", "かみ")
+    ("NORMAL","ノーマル"),("FIGHTING","かくとう"),("POISON","どく"),("GROUND","じめん"),
+    ("FLYING","ひこう"),("BUG","むし"),("ROCK","いわ"),("GHOST","ゴースト"),("STEEL","はがね"),
+    ("FIRE","ほのお"),("WATER","みず"),("ELECTRIC","でんき"),("GRASS","くさ"),("ICE","こおり"),
+    ("PSYCHIC","エスパー"),("DRAGON","ドラゴン"),("DARK","あく"),("FAIRY","フェアリー"),
+    ("SOUND","おと"),("SAND","すな"),("FOSSIL","かせき"),("WIND","かぜ"),("SNOW","ゆき"),
+    ("SHINE","ひかり"),("SHADE","やみ"),("GOD","かみ")
 ]
 
 GENDER = [
-    ("AlwaysMale", "♂のみ"), ("AlwaysFemale", "♀のみ"),
-    ("Genderless", "性別不明"),
-    ("FemaleOneEighth", "♂87.5/♀12.5"),
-    ("Female25Percent", "♂75/♀25"),
-    ("Female50Percent", "♂50/♀50"),
-    ("Female75Percent", "♂25/♀75"),
-    ("FemaleSevenEighths", "♂12.5/♀87.5"),
+    ("AlwaysMale","♂のみ"),("AlwaysFemale","♀のみ"),("Genderless","性別不明"),
+    ("FemaleOneEighth","♂87.5/♀12.5"),("Female25Percent","♂75/♀25"),("Female50Percent","♂50/♀50"),
+    ("Female75Percent","♂25/♀75"),("FemaleSevenEighths","♂12.5/♀87.5"),
 ]
 
 GROWTH = [
-    ("Medium", "100万タイプ"),
-    ("Erratic", "60万タイプ"),
-    ("Fluctuating", "164万タイプ"),
-    ("Parabolic", "105万タイプ"),
-    ("Fast", "80万タイプ"),
-    ("Slow", "125万タイプ"),
-]
-
-COLORS = [
-    ("", "—"), ("Red", "あか"), ("Blue", "あお"), ("Yellow", "き"),
-    ("Green", "みどり"), ("Black", "くろ"), ("Brown", "ちゃ"),
-    ("Purple", "むらさき"), ("Gray", "はい"), ("White", "しろ"),
-    ("Pink", "もも")
-]
-
-SHAPES = [
-    ("Head","あたま"),("Serpentine","へび"),("Finned","ひれ"),
-    ("HeadArms","あたまとうで"),("HeadBase","あたまとからだ"),
-    ("BipedalTail","尾もち2ほんあし"),("HeadLegs","あたまとあし"),
-    ("Quadruped","4ほんあし"),("Winged","つばさ"),("Multiped","ふくすうあし"),
-    ("MultiBody","ふくすうからだ"),("Bipedal","尾なし2ほんあし"),
-    ("MultiWinged","はなえありむし"),("Insectoid","はねなしむし")
-]
-
-HABITATS = [
-    ("None","生息地不明"),("Grassland","草原"),("Forest","森林"),("WatersEdge","水辺"),
-    ("Sea","海"),("Cave","洞窟"),("Mountain","山岳"),("RoughTerrain","荒地"),
-    ("Urban","都市"),("Marsh","湿地"),("Snow","雪原"),("Volcano","火山"),
-    ("Space","宇宙"),("Desert","砂漠"),("Ruins","遺跡"),
-    ("Seafloor","海底"),("Graveyard","墓場"),("Distortion","異空間"),("Rare","レア")
+    ("Medium","100万タイプ"),("Erratic","60万タイプ"),("Fluctuating","164万タイプ"),
+    ("Parabolic","105万タイプ"),("Fast","80万タイプ"),("Slow","125万タイプ"),
 ]
 
 EGG_GROUPS = [
-    ("", "—"),
+    ("","—"),
     ("Undiscovered","タマゴみはっけん"),("Monster","かいじゅう"),("Water1","すいちゅう１"),
     ("Bug","むし"),("Flying","ひこう"),("Field","りくじょう"),("Fairy","ようせい"),
-    ("Grass","しょくぶつ"),("HumanLike","ひとがた"),("Water3","すいちゅう３"),
-    ("Mineral","こうぶつ"),("Amorphous","ふていけい"),("Water2","すいちゅう２"),
-    ("Dragon","ドラゴン"),("Ditto","かみ"),("NoEggs","None")
+    ("Grass","しょくぶつ"),("HumanLike","ひとがた"),("Water3","すいちゅう３"),("Mineral","こうぶつ"),
+    ("Amorphous","ふていけい"),("Water2","すいちゅう２"),("Dragon","ドラゴン"),
+    ("Ditto","かみ"),("NoEggs","None")
 ]
 
-STAT_LABELS_JP = ["ＨＰ","こうげき","ぼうぎょ","とくこう","とくぼう","すばやさ"]
+COLORS = [
+    ("","—"),("Red","あか"),("Blue","あお"),("Yellow","き"),("Green","みどり"),
+    ("Black","くろ"),("Brown","ちゃ"),("Purple","むらさき"),("Gray","はい"),
+    ("White","しろ"),("Pink","もも")
+]
+
+SHAPES = [
+    ("","—"),
+    ("Head","あたま"),("Serpentine","へび"),("Finned","ひれ"),("HeadArms","あたまとうで"),
+    ("HeadBase","あたまとからだ"),("BipedalTail","尾もち2ほんあし"),("HeadLegs","あたまとあし"),
+    ("Quadruped","4ほんあし"),("Winged","つばさ"),("Multiped","ふくすうあし"),
+    ("MultiBody","ふくすうからだ"),("Bipedal","尾なし2ほんあし"),("MultiWinged","はなえありむし"),
+    ("Insectoid","はねなしむし")
+]
+
+HABITATS = [
+    ("","—"),
+    ("None","生息地不明"),("Grassland","草原"),("Forest","森林"),("WatersEdge","水辺"),("Sea","海"),
+    ("Cave","洞窟"),("Mountain","山岳"),("RoughTerrain","荒地"),("Urban","都市"),("Marsh","湿地"),
+    ("Snow","雪原"),("Volcano","火山"),("Space","宇宙"),("Desert","砂漠"),("Ruins","遺跡"),
+    ("Seafloor","海底"),("Graveyard","墓場"),("Distortion","異空間"),("Rare","レア")
+]
+
+def id2jp(pairs): return {i:jp for i,jp in pairs}
+def jp2id(pairs): return {jp:i for i,jp in pairs}
+
+TYPES_I2J, TYPES_J2I       = id2jp(TYPES), jp2id(TYPES)
+GENDER_I2J, GENDER_J2I     = id2jp(GENDER), jp2id(GENDER)
+GROWTH_I2J, GROWTH_J2I     = id2jp(GROWTH), jp2id(GROWTH)
+EGG_I2J, EGG_J2I           = id2jp(EGG_GROUPS), jp2id(EGG_GROUPS)
+COLORS_I2J, COLORS_J2I     = id2jp(COLORS), jp2id(COLORS)
+SHAPES_I2J, SHAPES_J2I     = id2jp(SHAPES), jp2id(SHAPES)
+HABITATS_I2J, HABITATS_J2I = id2jp(HABITATS), jp2id(HABITATS)
+
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("1150x820")
+        self.geometry("1120x820")
         self.minsize(980, 720)
 
         # 状態
@@ -107,351 +106,257 @@ class App(tk.Tk):
 
         # rsc候補
         self.moves_list = []
-        self.items_pairs = []
+        self.items_pairs = []   # (id, jp)
         self.items_id2jp = {}
         self.items_jp2id = {}
-        self.abilities_pairs = []
-        self.abilities_id2jp = {}
-        self.abilities_jp2id = {}
-        self.uniq_pairs = []
-        self.uniq_id2jp = {}
-        self.uniq_jp2id = {}
-        self.shiny_pairs = []
-        self.shiny_id2jp = {}
-        self.shiny_jp2id = {}
-        self.species_pairs = []  # [(SPECIES_ID, Name), ...]
 
-        # UI
+        self.species_values = []
+
         self._make_menu()
         self._make_layout()
 
     # ----------------- メニュー -----------------
     def _make_menu(self):
         m = tk.Menu(self)
-
         fm = tk.Menu(m, tearoff=0)
         fm.add_command(label="rscフォルダを選択…", command=self.choose_rsc)
         fm.add_command(label="PBSファイルを開く…", command=self.open_pbs)
         fm.add_separator()
-        fm.add_command(label="このポケモンだけ保存…", command=self.save_current)
         fm.add_command(label="全体を書き出し…", command=self.export_all)
         fm.add_separator()
         fm.add_command(label="終了", command=self.destroy)
-
         m.add_cascade(label="ファイル", menu=fm)
         self.config(menu=m)
 
     # ----------------- レイアウト -----------------
     def _make_layout(self):
-        root = ttk.Frame(self); root.pack(fill=tk.BOTH, expand=True)
+        container = ttk.Frame(self); container.pack(fill=tk.BOTH, expand=True)
 
-        # 左：IDリスト
-        left = ttk.Frame(root, width=320)
+        left = ttk.Frame(container, width=300)
         left.pack(side=tk.LEFT, fill=tk.Y)
-        ttk.Label(left, text="ポケモン").pack(anchor="w", padx=8, pady=(8, 2))
+        ttk.Label(left, text="ポケモン").pack(anchor="w", padx=6, pady=(8, 0))
         self.lb = tk.Listbox(left)
-        self.lb.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0,8))
+        self.lb.pack(fill=tk.BOTH, expand=True, padx=6, pady=(4, 8))
         self.lb.bind("<<ListboxSelect>>", self.on_select_id)
 
-        # 右：フォーム（縦スクロールバーのみ。どこでもスクロールは廃止）
-        right = ttk.Frame(root)
-        right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        right = ttk.Frame(container); right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        canvas = tk.Canvas(right, highlightthickness=0)
+        vsb = ttk.Scrollbar(right, orient="vertical", command=canvas.yview)
+        self.form = ttk.Frame(canvas)
+        self.form.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=self.form, anchor="nw")
+        canvas.configure(yscrollcommand=vsb.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True); vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.canvas = canvas
 
-        self.canvas = tk.Canvas(right, highlightthickness=0)
-        self.vsb = ttk.Scrollbar(right, orient="vertical", command=self.canvas.yview)
-        self.form = ttk.Frame(self.canvas)
+        # Name / FormName
+        self.v_name = tk.StringVar(); self._pack_row_text("Name", self.v_name)
+        self.v_form = tk.StringVar(); self._pack_row_text("FormName", self.v_form)
 
-        self.form.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self.canvas.create_window((0, 0), window=self.form, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.vsb.set)
-
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.vsb.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # ====== ここから「指定順序」でフィールド作成 ======
-        self._build_fields()
-
-    # ------------- フィールドの作成（順序固定） -------------
-    def _build_fields(self):
-        # Name
-        self.v_name = tk.StringVar()
-        frm, _ = row_text(self.form, "Name", self.v_name); frm.pack(anchor="w", padx=8, pady=4)
-
-        # FormName
-        self.v_form = tk.StringVar()
-        frm, _ = row_text(self.form, "FormName", self.v_form); frm.pack(anchor="w", padx=8, pady=4)
-
-        # Types（1行2列）
+        # Types（values は日本語のみ）
         self.v_type1 = tk.StringVar(); self.v_type2 = tk.StringVar()
-        type_values = [f"{id_}:{name}" if id_ else "—" for id_, name in TYPES]
-        frm, _ = row_two_combos(self.form, "Types", self.v_type1, self.v_type2, type_values)
-        frm.pack(anchor="w", padx=8, pady=4)
+        type_values_jp = [jp for _, jp in TYPES]
+        self._pack_row_two_combos("Types", self.v_type1, self.v_type2, type_values_jp)
 
-        # BaseStats（日本語ラベル）
+        # BaseStats
         self.v_bs = [tk.StringVar() for _ in range(6)]
-        frm = row_stats(self.form, STAT_LABELS_JP, self.v_bs)
-        frm.pack(anchor="w", padx=8, pady=4)
+        self._pack_row_stats(["ＨＰ","こうげき","ぼうぎょ","とくこう","とくぼう","すばやさ"], self.v_bs)
 
-        # GenderRatio / GrowthRate（選択式）
-        self.v_gender = tk.StringVar()
-        frm, _ = row_combo(self.form, "GenderRatio", self.v_gender, [f"{k}:{v}" for k, v in GENDER]); frm.pack(anchor="w", padx=8, pady=4)
-
-        self.v_growth = tk.StringVar()
-        frm, _ = row_combo(self.form, "GrowthRate", self.v_growth, [f"{k}:{v}" for k, v in GROWTH]); frm.pack(anchor="w", padx=8, pady=4)
+        # GenderRatio / GrowthRate（values は日本語のみ）
+        self.v_gender = tk.StringVar(); self._pack_row_combo("GenderRatio", self.v_gender, [jp for _, jp in GENDER])
+        self.v_growth = tk.StringVar(); self._pack_row_combo("GrowthRate", self.v_growth, [jp for _, jp in GROWTH])
 
         # BaseExp
-        self.v_baseexp = tk.StringVar()
-        frm, _ = row_number(self.form, "BaseExp", self.v_baseexp); frm.pack(anchor="w", padx=8, pady=4)
+        self.v_baseexp = tk.StringVar(); self._pack_row_number("BaseExp", self.v_baseexp)
 
-        # EVs（6項目）
+        # EVs
         self.v_evs = [tk.StringVar() for _ in range(6)]
-        frm = row_stats(self.form, ["EV_HP","EV_Atk","EV_Def","EV_SpA","EV_SpD","EV_Spe"], self.v_evs)
-        frm.pack(anchor="w", padx=8, pady=4)
+        self._pack_row_stats(["EV_HP","EV_Atk","EV_Def","EV_SpA","EV_SpD","EV_Spe"], self.v_evs)
 
         # Happiness
-        self.v_happy = tk.StringVar()
-        frm, _ = row_number(self.form, "Happiness", self.v_happy); frm.pack(anchor="w", padx=8, pady=4)
+        self.v_happy = tk.StringVar(); self._pack_row_number("Happiness", self.v_happy)
 
-        # Abilities / HiddenAbilities / UniqueAbilities / ShinyUnique（各コンボ）
-        self.v_abilities = tk.StringVar()
-        frm, _ = row_text(self.form, "Abilities", self.v_abilities)  # 後で rsc 読み込み時に combobox化も可能
-        frm.pack(anchor="w", padx=8, pady=4)
+        # Abilities (テキストのまま。次ステップで選択式化)
+        self.v_abilities = tk.StringVar(); self._pack_row_text("Abilities", self.v_abilities)
+        self.v_hidden = tk.StringVar();    self._pack_row_text("HiddenAbilities", self.v_hidden)
+        self.v_unique = tk.StringVar();    self._pack_row_text("UniqueAbilities", self.v_unique)
+        self.v_shiny  = tk.StringVar();    self._pack_row_text("ShinyUnique", self.v_shiny)
 
-        self.v_hidden = tk.StringVar()
-        frm, _ = row_text(self.form, "HiddenAbilities", self.v_hidden)
-        frm.pack(anchor="w", padx=8, pady=4)
+        # わざボタン
+        btnfrm = ttk.Frame(self.form); btnfrm.pack(fill=tk.X, padx=8, pady=6)
+        ttk.Button(btnfrm, text="レベル技を編集…", command=self.edit_level_moves).pack(side=tk.LEFT)
+        ttk.Button(btnfrm, text="教え技を編集…", command=self.edit_tutor_moves).pack(side=tk.LEFT, padx=6)
+        ttk.Button(btnfrm, text="タマゴ技を編集…", command=self.edit_egg_moves).pack(side=tk.LEFT)
 
-        self.v_unique = tk.StringVar()
-        frm, _ = row_text(self.form, "UniqueAbilities", self.v_unique)
-        frm.pack(anchor="w", padx=8, pady=4)
-
-        # ShinyUnique（abilities_shiny.txt）
-        self.v_shiny = tk.StringVar()
-        self.row_shiny, self.shiny_widget = row_text(self.form, "ShinyUnique", self.v_shiny)
-        self.row_shiny.pack(anchor="w", padx=8, pady=4)
-
-        # わざ編集ボタン 3つ（レベル→教え→タマゴ の順）
-        btns = ttk.Frame(self.form); btns.pack(anchor="w", padx=8, pady=4)
-        ttk.Button(btns, text="レベル技を編集…", command=self.edit_level_moves).pack(side=tk.LEFT)
-        ttk.Button(btns, text="教え技を編集…", command=self.edit_tutor_moves).pack(side=tk.LEFT, padx=6)
-        ttk.Button(btns, text="タマゴ技を編集…", command=self.edit_egg_moves).pack(side=tk.LEFT)
-
-        # EggGroups（2枠）
+        # EggGroups（二つ選択・values は日本語のみ）
         self.v_egg1 = tk.StringVar(); self.v_egg2 = tk.StringVar()
-        egg_vals = [f"{k}:{v}" for k,v in EGG_GROUPS]
-        frm, _ = row_two_combos(self.form, "EggGroups", self.v_egg1, self.v_egg2, egg_vals)
-        frm.pack(anchor="w", padx=8, pady=4)
+        egg_values_jp = [jp for _, jp in EGG_GROUPS]
+        self._pack_row_two_combos("EggGroups", self.v_egg1, self.v_egg2, egg_values_jp)
 
         # HatchSteps
-        self.v_hatch = tk.StringVar()
-        frm, _ = row_number(self.form, "HatchSteps", self.v_hatch); frm.pack(anchor="w", padx=8, pady=4)
+        self.v_hatch = tk.StringVar(); self._pack_row_number("HatchSteps", self.v_hatch)
 
-        # Incense / Offspring（1行）
-        row_io = ttk.Frame(self.form); row_io.pack(anchor="w", fill="x", padx=8, pady=4)
-        ttk.Label(row_io, text="Incense", width=16).pack(side=tk.LEFT)
-        self.v_incense = tk.StringVar()
-        self.cmb_incense = ttk.Combobox(row_io, textvariable=self.v_incense, state="readonly", width=30)
-        self.cmb_incense.pack(side=tk.LEFT, padx=(0,8))
-        ttk.Label(row_io, text="Offspring", width=16).pack(side=tk.LEFT)
-        self.v_offspring = tk.StringVar()
-        self.cmb_offspring = ttk.Combobox(row_io, textvariable=self.v_offspring, state="readonly", width=30)
-        self.cmb_offspring.pack(side=tk.LEFT)
+        # Incense / Offspring（同一行）
+        row = ttk.Frame(self.form); row.pack(fill=tk.X, padx=8, pady=6)
+        ttk.Label(row, text="Incense").grid(row=0, column=0, sticky="e", padx=(0,8))
+        self.v_incense = tk.StringVar(); self.cb_incense = ttk.Combobox(row, textvariable=self.v_incense, state="normal", width=30, values=[])
+        self.cb_incense.grid(row=0, column=1, sticky="we")
+        ttk.Label(row, text="Offspring").grid(row=0, column=2, sticky="e", padx=(18,8))
+        self.v_offspring = tk.StringVar(); self.cb_offspring = ttk.Combobox(row, textvariable=self.v_offspring, state="normal", width=35, values=[])
+        self.cb_offspring.grid(row=0, column=3, sticky="we")
+        row.grid_columnconfigure(1, weight=1); row.grid_columnconfigure(3, weight=1)
 
-        # Height / Weight（1行）
-        row_hw = ttk.Frame(self.form); row_hw.pack(anchor="w", fill="x", padx=8, pady=4)
-        ttk.Label(row_hw, text="Height", width=16).pack(side=tk.LEFT)
-        self.v_height = tk.StringVar()
-        ttk.Entry(row_hw, textvariable=self.v_height, width=10).pack(side=tk.LEFT, padx=(0,8))
-        ttk.Label(row_hw, text="Weight", width=16).pack(side=tk.LEFT)
-        self.v_weight = tk.StringVar()
-        ttk.Entry(row_hw, textvariable=self.v_weight, width=10).pack(side=tk.LEFT)
+        # Height / Weight
+        row = ttk.Frame(self.form); row.pack(fill=tk.X, padx=8, pady=6)
+        ttk.Label(row, text="Height").grid(row=0, column=0, sticky="e", padx=(0,8))
+        self.v_height = tk.StringVar(); ttk.Entry(row, textvariable=self.v_height).grid(row=0, column=1, sticky="we")
+        ttk.Label(row, text="Weight").grid(row=0, column=2, sticky="e", padx=(18,8))
+        self.v_weight = tk.StringVar(); ttk.Entry(row, textvariable=self.v_weight).grid(row=0, column=3, sticky="we")
+        row.grid_columnconfigure(1, weight=1); row.grid_columnconfigure(3, weight=1)
 
-        # Color / Shape（1行）
-        row_cs = ttk.Frame(self.form); row_cs.pack(anchor="w", fill="x", padx=8, pady=4)
-        ttk.Label(row_cs, text="Color", width=16).pack(side=tk.LEFT)
-        self.v_color = tk.StringVar()
-        ttk.Combobox(row_cs, textvariable=self.v_color, values=[f"{k}:{v}" for k,v in COLORS], state="readonly", width=20).pack(side=tk.LEFT, padx=(0,8))
-        ttk.Label(row_cs, text="Shape", width=16).pack(side=tk.LEFT)
-        self.v_shape = tk.StringVar()
-        ttk.Combobox(row_cs, textvariable=self.v_shape, values=[f"{k}:{v}" for k,v in SHAPES], state="readonly", width=20).pack(side=tk.LEFT)
+        # Color / Shape（values は日本語のみ）
+        row = ttk.Frame(self.form); row.pack(fill=tk.X, padx=8, pady=6)
+        ttk.Label(row, text="Color").grid(row=0, column=0, sticky="e", padx=(0,8))
+        self.v_color = tk.StringVar(); self.cb_color = ttk.Combobox(row, textvariable=self.v_color, state="readonly", values=[jp for _, jp in COLORS], width=28)
+        self.cb_color.grid(row=0, column=1, sticky="we")
+        ttk.Label(row, text="Shape").grid(row=0, column=2, sticky="e", padx=(18,8))
+        self.v_shape = tk.StringVar(); self.cb_shape = ttk.Combobox(row, textvariable=self.v_shape, state="readonly", values=[jp for _, jp in SHAPES], width=28)
+        self.cb_shape.grid(row=0, column=3, sticky="we")
+        row.grid_columnconfigure(1, weight=1); row.grid_columnconfigure(3, weight=1)
 
-        # Habitat
-        self.v_habitat = tk.StringVar()
-        frm, _ = row_combo(self.form, "Habitat", self.v_habitat, [f"{k}:{v}" for k,v in HABITATS]); frm.pack(anchor="w", padx=8, pady=4)
+        # Habitat（values は日本語のみ）
+        self.v_habitat = tk.StringVar(); self._pack_row_combo("Habitat", self.v_habitat, [jp for _, jp in HABITATS])
 
-        # Category
-        self.v_category = tk.StringVar()
-        frm, _ = row_text(self.form, "Category", self.v_category); frm.pack(anchor="w", padx=8, pady=4)
-
-        # Pokedex
+        # Category / Pokedex / Generation
+        self.v_category = tk.StringVar(); self._pack_row_text("Category", self.v_category)
         self.v_pokedex = tk.StringVar()
-        frm, _ = row_text(self.form, "Pokedex", self.v_pokedex); frm.pack(anchor="w", padx=8, pady=4)
+        frm = ttk.Frame(self.form); frm.pack(fill=tk.X, padx=8, pady=6)
+        ttk.Label(frm, text="Pokedex").pack(anchor="w")
+        self.txt_pokedex = tk.Text(frm, height=4); self.txt_pokedex.pack(fill=tk.X, expand=True)
 
-        # Generation
-        self.v_generation = tk.StringVar()
-        frm, _ = row_number(self.form, "Generation", self.v_generation); frm.pack(anchor="w", padx=8, pady=4)
+        self.v_generation = tk.StringVar(); self._pack_row_number("Generation", self.v_generation)
 
-        # Flags（テキスト or 後でチェック群に差し替え可能）
-        self.v_flags = tk.StringVar()
-        frm, _ = row_text(self.form, "Flags", self.v_flags); frm.pack(anchor="w", padx=8, pady=4)
+        # Flags（テキストのまま）
+        self.v_flags = tk.StringVar(); self._pack_row_text("Flags", self.v_flags)
 
-        # WildItemCommon / Uncommon / Rare（アイテムから選択）
-        self.v_wild_c = tk.StringVar(); self.v_wild_u = tk.StringVar(); self.v_wild_r = tk.StringVar()
-        frm, _ = row_combo(self.form, "WildItemCommon", self.v_wild_c, []); frm.pack(anchor="w", padx=8, pady=4)
-        frm, _ = row_combo(self.form, "WildItemUncommon", self.v_wild_u, []); frm.pack(anchor="w", padx=8, pady=4)
-        frm, _ = row_combo(self.form, "WildItemRare", self.v_wild_r, []); frm.pack(anchor="w", padx=8, pady=4)
+        # Wild items
+        self.v_wild_c = tk.StringVar(); self.cb_wild_c = ttk.Combobox(self.form, textvariable=self.v_wild_c, state="normal"); self._pack_row_inline("WildItemCommon", self.cb_wild_c)
+        self.v_wild_u = tk.StringVar(); self.cb_wild_u = ttk.Combobox(self.form, textvariable=self.v_wild_u, state="normal"); self._pack_row_inline("WildItemUncommon", self.cb_wild_u)
+        self.v_wild_r = tk.StringVar(); self.cb_wild_r = ttk.Combobox(self.form, textvariable=self.v_wild_r, state="normal"); self._pack_row_inline("WildItemRare", self.cb_wild_r)
 
-        # 進化を編集（ボタン）
-        evofrm = ttk.Frame(self.form); evofrm.pack(anchor="w", padx=8, pady=4)
+        # 進化
+        evofrm = ttk.Frame(self.form); evofrm.pack(anchor="w", padx=8, pady=6)
         ttk.Button(evofrm, text="進化を編集…", command=self.edit_evolutions).pack(side=tk.LEFT)
 
-        # RivalSpecies
-        self.v_rival = tk.StringVar()
-        frm, _ = row_combo(self.form, "RivalSpecies", self.v_rival, []); frm.pack(anchor="w", padx=8, pady=4)
+        # Rival / SOS / Rate
+        self.v_rival = tk.StringVar(); self.cb_rival = ttk.Combobox(self.form, textvariable=self.v_rival, state="normal"); self._pack_row_inline("RivalSpecies", self.cb_rival)
+        self.v_soss  = tk.StringVar(); self.cb_soss  = ttk.Combobox(self.form, textvariable=self.v_soss,  state="normal"); self._pack_row_inline("SpeciesSOS", self.cb_soss)
+        self.v_sosrate = tk.StringVar(); self._pack_row_number("CallRateSOS", self.v_sosrate)
 
-        # SpeciesSOS
-        self.v_soss = tk.StringVar()
-        frm, _ = row_combo(self.form, "SpeciesSOS", self.v_soss, []); frm.pack(anchor="w", padx=8, pady=4)
+        # ツールバー
+        top = ttk.Frame(self); top.pack(fill=tk.X, padx=10, pady=(6, 0))
+        ttk.Button(top, text="PBSファイルを開く", command=self.open_pbs).pack(side=tk.LEFT)
+        ttk.Button(top, text="全体を書き出し", command=self.export_all).pack(side=tk.LEFT, padx=6)
 
-        # CallRateSOS
-        self.v_callrate = tk.StringVar()
-        frm, _ = row_number(self.form, "CallRateSOS", self.v_callrate); frm.pack(anchor="w", padx=8, pady=4)
+    # ---- 小物UI ----
+    def _pack_row_text(self, label, var):
+        frm, _ = row_text(self.form, label, var); frm.pack(fill=tk.X, padx=8, pady=6)
 
-        # 動作ボタン（下部）
-        btns = ttk.Frame(self.form); btns.pack(anchor="w", padx=8, pady=8)
-        ttk.Button(btns, text="このポケモンだけ保存", command=self.save_current).pack(side=tk.LEFT)
-        ttk.Button(btns, text="全体を書き出し", command=self.export_all).pack(side=tk.LEFT, padx=8)
+    def _pack_row_number(self, label, var):
+        frm, _ = row_number(self.form, label, var); frm.pack(fill=tk.X, padx=8, pady=6)
+
+    def _pack_row_combo(self, label, var, values):
+        frm, _ = row_combo(self.form, label, var, values); frm.pack(fill=tk.X, padx=8, pady=6)
+
+    def _pack_row_two_combos(self, label, var1, var2, values):
+        frm, _ = row_two_combos(self.form, label, var1, var2, values); frm.pack(fill=tk.X, padx=8, pady=6)
+
+    def _pack_row_stats(self, labels, var_list):
+        frm = row_stats(self.form, labels, var_list); frm.pack(fill=tk.X, padx=8, pady=6)
+
+    def _pack_row_inline(self, label, widget):
+        frm = ttk.Frame(self.form); frm.pack(fill=tk.X, padx=8, pady=6)
+        ttk.Label(frm, text=label, width=18, anchor="e").pack(side=tk.LEFT, padx=(0,8))
+        widget.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
     # ----------------- rsc 読み込み -----------------
     def choose_rsc(self):
         d = filedialog.askdirectory(title="rscフォルダを選択")
         if not d: return
         self.rsc_dir = d
-
-        # moves*.txt → 技候補
-        self.moves_list = self._load_rsc_pairs_multi(prefix="moves")
-        # items.txt → アイテム（Incense/野生アイテム）
-        self.items_pairs = self._load_rsc_pairs_single("items.txt")
+        self.moves_list = self._load_moves_rsc()
+        self.items_pairs = self._load_items_pairs()
         self.items_id2jp = {k:v for k,v in self.items_pairs}
         self.items_jp2id = {v:k for k,v in self.items_pairs}
-        incense_jp = [v for k,v in self.items_pairs if k.upper().endswith("INCENSE")]
-        self.cmb_incense["values"] = incense_jp if incense_jp else [v for _,v in self.items_pairs]
-        item_vals = [v for _,v in self.items_pairs]
-        for cmb in (self._get_combo("WildItemCommon"), self._get_combo("WildItemUncommon"), self._get_combo("WildItemRare")):
-            cmb["values"] = item_vals
+        # Incense 候補（ID が INCENSE で終わるもの）表示は日本語名
+        incense = [v for k,v in self.items_pairs if k.upper().endswith("INCENSE")]
+        all_items = [v for _,v in self.items_pairs]
+        self.cb_incense["values"] = incense if incense else all_items
+        self.cb_wild_c["values"] = all_items
+        self.cb_wild_u["values"] = all_items
+        self.cb_wild_r["values"] = all_items
+        messagebox.showinfo("rsc", "候補リストを読み込みました。")
 
-        # abilities.txt / abilities_unique.txt / abilities_shiny.txt
-        self.abilities_pairs = self._load_rsc_pairs_single("abilities.txt")
-        self.uniq_pairs      = self._load_rsc_pairs_single("abilities_unique.txt")
-        self.shiny_pairs     = self._load_rsc_pairs_single("abilities_shiny.txt")
+    def _load_moves_rsc(self):
+        arr = []
+        if not self.rsc_dir or not os.path.isdir(self.rsc_dir): return arr
+        for name in os.listdir(self.rsc_dir):
+            low = name.lower()
+            if low.startswith("moves") and low.endswith(".txt"):
+                with open(os.path.join(self.rsc_dir, name), "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        line=line.strip()
+                        if not line or line.startswith("#"): continue
+                        if line.startswith("[") and line.endswith("]"):
+                            arr.append(line.strip("[]"))
+        return sorted(set(arr))
 
-        self.abilities_id2jp = {k:v for k,v in self.abilities_pairs}
-        self.abilities_jp2id = {v:k for k,v in self.abilities_pairs}
-        self.uniq_id2jp      = {k:v for k,v in self.uniq_pairs}
-        self.uniq_jp2id      = {v:k for k,v in self.uniq_pairs}
-        self.shiny_id2jp     = {k:v for k,v in self.shiny_pairs}
-        self.shiny_jp2id     = {v:k for k,v in self.shiny_pairs}
-
-        # 種族候補（PBS 読み込み後に反映）
-        self._refresh_species_combos()
-
-        messagebox.showinfo("rsc", f"rsc を読み込みました：\n{d}")
-
-    def _load_rsc_pairs_single(self, filename):
-        path = os.path.join(self.rsc_dir, filename)
-        if not (self.rsc_dir and os.path.isfile(path)): return []
-        return self._read_pairs_any(path)
-
-    def _load_rsc_pairs_multi(self, prefix):
-        res = {}
-        if not (self.rsc_dir and os.path.isdir(self.rsc_dir)): return []
-        for nm in os.listdir(self.rsc_dir):
-            low = nm.lower()
-            if low.startswith(prefix) and low.endswith(".txt"):
-                for k,v in self._read_pairs_any(os.path.join(self.rsc_dir, nm)):
-                    res[k] = v
-        return sorted(res.items())
-
-    def _read_pairs_any(self, path):
+    def _load_items_pairs(self):
         pairs = []
+        if not self.rsc_dir: return pairs
+        path = os.path.join(self.rsc_dir, "items.txt")
+        if not os.path.isfile(path): return pairs
+        import re
+        cur_id = None
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for raw in f:
                 line = raw.strip()
                 if not line or line.startswith("#") or line.startswith(";"): continue
-                if line.startswith("[") and "]" in line and "=" in line:
-                    # PBS形式 [ID] ... Name=日本語
-                    if line.startswith("[") and line.endswith("]"):
-                        cur_id = line.strip("[]").strip()
-                        # 探索モード（簡易）
-                        # 実用十分：別のセクションに到達するまで Name= を拾う
-                        # ここでは簡易のため、直後に Name= の行が来たと仮定
-                    continue
-                # CSV/TSV/Colon のゆるい対応
-                if ":" in line and "," not in line and "\t" not in line:
-                    k, v = line.split(":", 1)
-                elif "\t" in line and "," not in line:
-                    k, v = line.split("\t", 1)
-                else:
-                    parts = [p.strip() for p in line.split(",")]
-                    if len(parts) < 2: continue
-                    k, v = parts[0], parts[1]
-                pairs.append((k.strip(), v.strip()))
+                m = re.match(r"^\[(.+)\]$", line)
+                if m:
+                    cur_id = m.group(1).strip(); continue
+                if cur_id:
+                    n = re.match(r"^Name\s*=\s*(.+)$", line)
+                    if n:
+                        pairs.append((cur_id, n.group(1).strip()))
+                        cur_id = None
         return pairs
-
-    def _get_combo(self, label_text):
-        # フォーム上の該当 row_combo の Combobox を簡易取得
-        for child in self.form.winfo_children():
-            # row_comboは (Frame, Combobox) を返している想定
-            try:
-                if isinstance(child, ttk.Frame):
-                    lbls = [w for w in child.winfo_children() if isinstance(w, ttk.Label)]
-                    if lbls and lbls[0].cget("text") == label_text:
-                        combos = [w for w in child.winfo_children() if isinstance(w, ttk.Combobox)]
-                        if combos:
-                            return combos[-1]
-            except:
-                pass
-        # 見つからなければダミー
-        return ttk.Combobox(self.form)
 
     # ----------------- PBS 読み込み -----------------
     def open_pbs(self):
-        path = filedialog.askopenfilename(
-            title="PBSファイルを開く",
-            filetypes=[("Text", "*.txt"), ("All", "*.*")]
-        )
-        if not path:
-            return
+        path = filedialog.askopenfilename(title="PBSファイルを開く", filetypes=[("Text","*.txt"),("All","*.*")])
+        if not path: return
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             txt = f.read()
         self.original_text = txt
-
         secs = parsePBS(txt)
         self.sections = secs
         self.sec_by_id = {s["id"]: s for s in secs}
-
-        # 左のリスト
+        # 左リスト更新
         self.lb.delete(0, tk.END)
+        ids = []
         for s in secs:
             name = s["kv"].get("Name", "")
             self.lb.insert(tk.END, f"{s['id']} — {name}")
+            ids.append(s["id"])
+        self.species_values = [f"{sid} — {self.sec_by_id[sid]['kv'].get('Name','')}" for sid in ids]
+        self.cb_offspring["values"] = self.species_values
+        self.cb_rival["values"] = self.species_values
+        self.cb_soss["values"] = self.species_values
+        # デフォルト選択
         if secs:
-            default = "BULBASAUR" if "BULBASAUR" in self.sec_by_id else secs[0]["id"]
             self.lb.select_set(0)
-            self.load_section(default)
-
-        # 種族候補を更新（Rival/Offspring/SOS）
-        self._refresh_species_combos()
-
-    def _refresh_species_combos(self):
-        if not self.sec_by_id:
-            return
-        ids = list(self.sec_by_id.keys())
-        self.species_pairs = [(sid, self.sec_by_id[sid]['kv'].get('Name','')) for sid in ids]
-        disp = [f"{sid} — {self.sec_by_id[sid]['kv'].get('Name','')}" for sid in ids]
-        self.cmb_offspring["values"] = disp
-        self._get_combo("RivalSpecies")["values"] = disp
-        self._get_combo("SpeciesSOS")["values"] = disp
+            self.on_select_id()
 
     # ----------------- 選択反映 -----------------
     def on_select_id(self, event=None):
@@ -459,276 +364,219 @@ class App(tk.Tk):
         if not i: return
         sec = self.sections[i[0]]
         self.current_id = sec["id"]
-        self._load_to_form(sec)
+        kv = sec["kv"]; g = lambda k: kv.get(k, "")
 
-    def _id2jp(self, pairs, id_):
-        return dict(pairs).get(id_, id_)
+        self.v_name.set(g("Name")); self.v_form.set(g("FormName"))
 
-    def _split_idjp(self, s):
-        # "ID:日本語" → (ID, 日本語)
-        if ":" in s:
-            a,b = s.split(":",1); return a.strip(), b.strip()
-        return s.strip(), s.strip()
-
-    def _load_to_form(self, sec):
-        kv = sec["kv"]; g = kv.get
-
-        self.v_name.set(g("Name",""))
-        self.v_form.set(g("FormName",""))
-
-        # Types
-        t = (g("Types","") or "").split(",")
-        t1 = t[0].strip() if len(t)>0 else ""
-        t2 = t[1].strip() if len(t)>1 else ""
-        jp1 = next((n for i,n in TYPES if i==t1), t1 or "—")
-        jp2 = next((n for i,n in TYPES if i==t2), t2 or "—")
-        self.v_type1.set(f"{t1}:{jp1}" if t1 else "—")
-        self.v_type2.set(f"{t2}:{jp2}" if t2 else "—")
+        # Types (ID->JP)
+        t = (g("Types") or "").split(",")
+        self.v_type1.set(TYPES_I2J.get(t[0].strip() if len(t)>0 else "", ""))
+        self.v_type2.set(TYPES_I2J.get(t[1].strip() if len(t)>1 else "", ""))
 
         # BaseStats
-        bs = (g("BaseStats","") or "").split(",")
-        for idx in range(6):
-            self.v_bs[idx].set(bs[idx].strip() if idx < len(bs) else "")
+        bs = (g("BaseStats") or "").split(",")
+        for j in range(6): self.v_bs[j].set(bs[j].strip() if j < len(bs) else "")
 
-        # Gender / Growth
-        self.v_gender.set(f"{g('GenderRatio','')}:" + next((v for k,v in GENDER if k==g("GenderRatio","")), g("GenderRatio","")))
-        self.v_growth.set(f"{g('GrowthRate','')}:" + next((v for k,v in GROWTH if k==g("GrowthRate","")), g("GrowthRate","")))
+        # GenderRatio / GrowthRate (ID->JP)
+        self.v_gender.set(GENDER_I2J.get(g("GenderRatio"), g("GenderRatio")))
+        self.v_growth.set(GROWTH_I2J.get(g("GrowthRate"), g("GrowthRate")))
 
-        self.v_baseexp.set(g("BaseExp",""))
+        # BaseExp
+        self.v_baseexp.set(g("BaseExp"))
 
         # EVs
-        ev_map = {"HP":0,"ATTACK":1,"DEFENSE":2,"SPECIAL_ATTACK":3,"SPECIAL_DEFENSE":4,"SPEED":5,"ATK":1,"DEF":2,"SPA":3,"SPD":4,"SPE":5}
-        for j in range(6): self.v_evs[j].set("")
-        parts = (g("EVs","") or "").replace(",", " ").split()
-        for k, v in zip(parts[::2], parts[1::2]):
-            kk = k.strip().upper(); idx = ev_map.get(kk, None)
-            if idx is not None: self.v_evs[idx].set(v.strip())
+        evs = g("EVs"); vals = [""]*6
+        if evs:
+            parts = evs.replace(",", " ").split()
+            ev_map = {"HP":0,"ATTACK":1,"DEFENSE":2,"SPECIAL_ATTACK":3,"SPECIAL_DEFENSE":4,"SPEED":5,
+                      "ATK":1,"DEF":2,"SPA":3,"SPD":4,"SPE":5}
+            for k,v in zip(parts[::2], parts[1::2]):
+                kk = k.upper().strip()
+                if kk in ev_map: vals[ev_map[kk]] = v
+        for j in range(6): self.v_evs[j].set(vals[j])
 
-        self.v_happy.set(g("Happiness",""))
+        # Happiness
+        self.v_happy.set(g("Happiness"))
 
-        # Abilities
-        self.v_abilities.set(g("Abilities",""))
-        self.v_hidden.set(g("HiddenAbilities",""))
-        self.v_unique.set(g("UniqueAbilities",""))
-        self.v_shiny.set(g("ShinyUnique",""))
+        # Abilities (そのまま/次ステップでコンボ化)
+        self.v_abilities.set(g("Abilities")); self.v_hidden.set(g("HiddenAbilities"))
+        self.v_unique.set(g("UniqueAbilities")); self.v_shiny.set(g("ShinyUnique"))
 
-        # EggGroups
-        eg = [x.strip() for x in (g("EggGroups","") or "").split(",") if x.strip()]
-        self.v_egg1.set(eg[0] if len(eg)>0 else "")
-        self.v_egg2.set(eg[1] if len(eg)>1 else "")
+        # Moves
+        self.level_moves = [x.strip() for x in (g("Moves") or "").split() if x.strip()]
+        self.tutor_moves = [x.strip() for x in (g("TutorMoves") or "").split() if x.strip()]
+        self.egg_moves   = [x.strip() for x in (g("EggMoves") or "").split() if x.strip()]
 
-        self.v_hatch.set(g("HatchSteps",""))
+        # EggGroups (ID->JP)
+        eg = [x.strip() for x in (g("EggGroups") or "").split(",") if x.strip()]
+        self.v_egg1.set(EGG_I2J.get(eg[0], "") if len(eg)>0 else "")
+        self.v_egg2.set(EGG_I2J.get(eg[1], "") if len(eg)>1 else "")
+
+        # HatchSteps
+        self.v_hatch.set(g("HatchSteps"))
 
         # Incense / Offspring
-        self.v_incense.set(self.items_id2jp.get(g("Incense",""), g("Incense","")))
-        off = g("Offspring","")
-        self.v_offspring.set(next((f"{sid} — {nm}" for sid,nm in self.species_pairs if sid==off), off))
+        inc = g("Incense"); self.v_incense.set(self.items_id2jp.get(inc, inc))
+        self.v_offspring.set(g("Offspring"))
 
-        # Height/Weight
-        self.v_height.set(g("Height",""))
-        self.v_weight.set(g("Weight",""))
+        # Height / Weight
+        self.v_height.set(g("Height")); self.v_weight.set(g("Weight"))
 
-        # Color/Shape/Habitat
-        self.v_color.set(f"{g('Color','')}:" + next((v for k,v in COLORS if k==g("Color","")), g("Color","")))
-        self.v_shape.set(f"{g('Shape','')}:" + next((v for k,v in SHAPES if k==g("Shape","")), g("Shape","")))
-        self.v_habitat.set(f"{g('Habitat','')}:" + next((v for k,v in HABITATS if k==g("Habitat","")), g("Habitat","")))
+        # Color / Shape / Habitat (ID->JP)
+        self.v_color.set(COLORS_I2J.get(g("Color"), g("Color")))
+        self.v_shape.set(SHAPES_I2J.get(g("Shape"), g("Shape")))
+        self.v_habitat.set(HABITATS_I2J.get(g("Habitat"), g("Habitat")))
 
-        self.v_category.set(g("Category",""))
-        self.v_pokedex.set(g("Pokedex",""))
-        self.v_generation.set(g("Generation",""))
+        # Category / Pokedex / Generation
+        self.v_category.set(g("Category"))
+        self.txt_pokedex.delete("1.0","end"); self.txt_pokedex.insert("1.0", g("Pokedex"))
+        self.v_generation.set(g("Generation"))
 
-        self.v_flags.set(g("Flags",""))
+        # Flags
+        self.v_flags.set(g("Flags"))
 
-        # Wild Items
-        self.v_wild_c.set(self.items_id2jp.get(g("WildItemCommon",""), g("WildItemCommon","")))
-        self.v_wild_u.set(self.items_id2jp.get(g("WildItemUncommon",""), g("WildItemUncommon","")))
-        self.v_wild_r.set(self.items_id2jp.get(g("WildItemRare",""), g("WildItemRare","")))
+        # Wild items (ID->JP表示)
+        self.v_wild_c.set(self.items_id2jp.get(g("WildItemCommon"), g("WildItemCommon")))
+        self.v_wild_u.set(self.items_id2jp.get(g("WildItemUncommon"), g("WildItemUncommon")))
+        self.v_wild_r.set(self.items_id2jp.get(g("WildItemRare"), g("WildItemRare")))
 
-        # Rival/SOS
-        self.v_rival.set(next((f"{sid} — {nm}" for sid,nm in self.species_pairs if sid==g("RivalSpecies","")), g("RivalSpecies","")))
-        self.v_soss.set(next((f"{sid} — {nm}" for sid,nm in self.species_pairs if sid==g("SpeciesSOS","")), g("SpeciesSOS","")))
+        # Evolutions & others
+        self.current_evolutions = g("Evolutions")
+        self.v_rival.set(g("RivalSpecies")); self.v_soss.set(g("SpeciesSOS"))
+        self.v_sosrate.set(g("CallRateSOS"))
 
-        self.v_callrate.set(g("CallRateSOS",""))
-
-        # Movesは別ダイアログで編集、ここでは保持しない（元テキストを使う想定）
-
-    # ----------------- 反映（フォーム → セクション） -----------------
+    # ----------------- 反映（保存用） -----------------
     def apply_to_current(self):
         if not self.current_id: return
         sec = self.sec_by_id[self.current_id]
-        kv = sec["kv"]
+        def setkv(k,v):
+            v = "" if v is None else str(v).strip()
+            if v == "": sec["kv"].pop(k, None)
+            else: sec["kv"][k] = v
 
-        def setkv(k, v):
-            v = ("" if v is None else str(v)).strip()
-            if v == "": kv.pop(k, None)
-            else: kv[k] = v
+        setkv("Name", self.v_name.get()); setkv("FormName", self.v_form.get())
 
-        setkv("Name", self.v_name.get())
-        setkv("FormName", self.v_form.get())
-
-        # Types
-        t1 = self._split_idjp(self.v_type1.get())[0] if self.v_type1.get() and self.v_type1.get()!="—" else ""
-        t2 = self._split_idjp(self.v_type2.get())[0] if self.v_type2.get() and self.v_type2.get()!="—" else ""
-        setkv("Types", ",".join([x for x in (t1, t2) if x]))
+        # Types (JP->ID)
+        t1 = TYPES_J2I.get(self.v_type1.get().strip(), "")
+        t2 = TYPES_J2I.get(self.v_type2.get().strip(), "")
+        setkv("Types", ",".join([x for x in [t1,t2] if x]))
 
         # BaseStats
-        bs = ",".join(v.get().strip() for v in self.v_bs)
-        setkv("BaseStats", bs)
+        setkv("BaseStats", ",".join(v.get().strip() for v in self.v_bs))
 
-        # Gender/Growth
-        setkv("GenderRatio", self._split_idjp(self.v_gender.get())[0])
-        setkv("GrowthRate", self._split_idjp(self.v_growth.get())[0])
+        # GenderRatio / GrowthRate (JP->ID)
+        setkv("GenderRatio", GENDER_J2I.get(self.v_gender.get().strip(), self.v_gender.get().strip()))
+        setkv("GrowthRate",  GROWTH_J2I.get(self.v_growth.get().strip(), self.v_growth.get().strip()))
 
+        # BaseExp
         setkv("BaseExp", self.v_baseexp.get())
 
         # EVs
-        ev_keys = ["HP","ATTACK","DEFENSE","SPECIAL_ATTACK","SPECIAL_DEFENSE","SPEED"]
-        ev_parts = []
-        for lab, var in zip(ev_keys, self.v_evs):
-            val = var.get().strip()
-            if val and val != "0":
-                ev_parts.append(f"{lab},{val}")
-        setkv("EVs", " ".join(ev_parts))
+        parts=[]; labs=[("HP",0),("ATTACK",1),("DEFENSE",2),("SPECIAL_ATTACK",3),("SPECIAL_DEFENSE",4),("SPEED",5)]
+        for lab,idx in labs:
+            val=self.v_evs[idx].get().strip()
+            if val: parts.append(f"{lab},{val}")
+        setkv("EVs"," ".join(parts))
 
+        # Happiness
         setkv("Happiness", self.v_happy.get())
 
-        # Abilities など（今はテキスト/自由入力。将来コンボ化可）
-        setkv("Abilities", self.v_abilities.get())
-        setkv("HiddenAbilities", self.v_hidden.get())
-        setkv("UniqueAbilities", self.v_unique.get())
-        setkv("ShinyUnique", self.v_shiny.get())
+        # Abilities (テキストのまま)
+        setkv("Abilities", self.v_abilities.get()); setkv("HiddenAbilities", self.v_hidden.get())
+        setkv("UniqueAbilities", self.v_unique.get()); setkv("ShinyUnique", self.v_shiny.get())
 
-        # EggGroups
-        eg1 = self._split_idjp(self.v_egg1.get())[0] if self.v_egg1.get() else ""
-        eg2 = self._split_idjp(self.v_egg2.get())[0] if self.v_egg2.get() else ""
-        setkv("EggGroups", ",".join([x for x in (eg1, eg2) if x]))
+        # Moves
+        if hasattr(self,"level_moves"): setkv("Moves"," ".join(self.level_moves))
+        if hasattr(self,"tutor_moves"): setkv("TutorMoves"," ".join(self.tutor_moves))
+        if hasattr(self,"egg_moves"):   setkv("EggMoves"," ".join(self.egg_moves))
 
+        # EggGroups (JP->ID)
+        eg1 = EGG_J2I.get(self.v_egg1.get().strip(), "")
+        eg2 = EGG_J2I.get(self.v_egg2.get().strip(), "")
+        setkv("EggGroups", ",".join([x for x in [eg1,eg2] if x]))
+
+        # HatchSteps
         setkv("HatchSteps", self.v_hatch.get())
 
-        # Incense/Offspring
+        # Incense / Offspring
         inc_id = self.items_jp2id.get(self.v_incense.get().strip(), self.v_incense.get().strip())
         setkv("Incense", inc_id)
-        off = self.v_offspring.get().strip()
-        off_id = off.split("—",1)[0].strip() if "—" in off else off
-        setkv("Offspring", off_id)
+        off = self.v_offspring.get()
+        setkv("Offspring", off.split(" —",1)[0] if " —" in off else off)
 
-        # Height/Weight
-        setkv("Height", self.v_height.get())
-        setkv("Weight", self.v_weight.get())
+        # Height / Weight
+        setkv("Height", self.v_height.get()); setkv("Weight", self.v_weight.get())
 
-        # Color/Shape/Habitat
-        setkv("Color", self._split_idjp(self.v_color.get())[0])
-        setkv("Shape", self._split_idjp(self.v_shape.get())[0])
-        setkv("Habitat", self._split_idjp(self.v_habitat.get())[0])
+        # Color / Shape / Habitat (JP->ID)
+        setkv("Color", COLORS_J2I.get(self.v_color.get().strip(), self.v_color.get().strip()))
+        setkv("Shape", SHAPES_J2I.get(self.v_shape.get().strip(), self.v_shape.get().strip()))
+        setkv("Habitat", HABITATS_J2I.get(self.v_habitat.get().strip(), self.v_habitat.get().strip()))
 
         # Category / Pokedex / Generation
         setkv("Category", self.v_category.get())
-        setkv("Pokedex", self.v_pokedex.get())
+        setkv("Pokedex", self.txt_pokedex.get("1.0","end").strip())
         setkv("Generation", self.v_generation.get())
 
         # Flags
         setkv("Flags", self.v_flags.get())
 
-        # Wild Items
-        setkv("WildItemCommon", self.items_jp2id.get(self.v_wild_c.get().strip(), self.v_wild_c.get().strip()))
+        # Wild items
+        setkv("WildItemCommon",   self.items_jp2id.get(self.v_wild_c.get().strip(), self.v_wild_c.get().strip()))
         setkv("WildItemUncommon", self.items_jp2id.get(self.v_wild_u.get().strip(), self.v_wild_u.get().strip()))
-        setkv("WildItemRare", self.items_jp2id.get(self.v_wild_r.get().strip(), self.v_wild_r.get().strip()))
+        setkv("WildItemRare",     self.items_jp2id.get(self.v_wild_r.get().strip(), self.v_wild_r.get().strip()))
 
-        # Rival/SOS
-        rv = self.v_rival.get().strip(); setkv("RivalSpecies", rv.split("—",1)[0].strip() if "—" in rv else rv)
-        ss = self.v_soss.get().strip(); setkv("SpeciesSOS", ss.split("—",1)[0].strip() if "—" in ss else ss)
+        # Evolutions / Rival / SOS
+        if hasattr(self, "current_evolutions"): setkv("Evolutions", self.current_evolutions)
+        setkv("RivalSpecies", self.v_rival.get().split(" —",1)[0] if " —" in self.v_rival.get() else self.v_rival.get())
+        setkv("SpeciesSOS",   self.v_soss.get().split(" —",1)[0] if " —" in self.v_soss.get() else self.v_soss.get())
+        setkv("CallRateSOS",  self.v_sosrate.get())
 
-        # CallRateSOS
-        setkv("CallRateSOS", self.v_callrate.get())
-
-    # ----------------- 保存 -----------------
-    def save_current(self):
-        if not self.current_id:
-            messagebox.showinfo("保存", "ポケモンが選択されていません。"); return
-        self.apply_to_current()
-        sec = self.sec_by_id[self.current_id]
-        block = stringify_section(sec)
-        path = filedialog.asksaveasfilename(
-            title="このポケモンだけ保存",
-            defaultextension=".txt",
-            initialfile=f"{self.current_id}.pbs.txt",
-            filetypes=[("Text","*.txt"),("All","*.*")]
-        )
-        if not path: return
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(block.rstrip("\n") + "\n")
-        messagebox.showinfo("保存", "書き出しました。")
-
+    # ----------------- 保存系 -----------------
     def export_all(self):
         if not self.original_text:
             messagebox.showinfo("書き出し", "先にPBSファイルを開いてください。"); return
-        if self.current_id:
-            self.apply_to_current()
+        if self.current_id: self.apply_to_current()
         text = self.original_text
         for s in self.sections:
             snap = self.sec_by_id.get(s["id"])
-            if snap:
-                text = replace_section_in_text(text, snap)
-        path = filedialog.asksaveasfilename(
-            title="全体ファイルを書き出し",
-            defaultextension=".txt",
-            initialfile="pokemon_Gen1_edited.txt",
-            filetypes=[("Text","*.txt"),("All","*.*")]
-        )
+            if snap: text = replace_section_in_text(text, snap)
+        path = filedialog.asksaveasfilename(title="全体ファイルを書き出し", defaultextension=".txt",
+                                            initialfile="pokemon_Gen1_edited.txt", filetypes=[("Text","*.txt"),("All","*.*")])
         if not path: return
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(text)
+        with open(path, "w", encoding="utf-8") as f: f.write(text)
         messagebox.showinfo("保存", "全体を書き出しました。")
 
-    # ----------------- ダイアログ（わざ/進化） -----------------
+    # ----------------- ダイアログ -----------------
     def edit_level_moves(self):
-        if not self.moves_list:
-            messagebox.showwarning("moves", "先に rsc で moves*.txt を読み込んでください。")
-            return
-        # 既存文字列はセクションから取り直す
-        cur = self.sec_by_id[self.current_id]["kv"].get("Moves","") if self.current_id else ""
-        dlg = MovesDialog(self, [m for _,m in self.moves_list], title="レベル技の編集", with_level=True, initial=[p for p in cur.split() if p.strip()])
+        moves = self.moves_list if self.moves_list else []
+        initial = getattr(self, "level_moves", [])
+        dlg = MovesDialog(self, moves if moves else initial, "レベル技の編集", with_level=True, initial=initial)
         self.wait_window(dlg)
-        if dlg.result is not None:
-            self.sec_by_id[self.current_id]["kv"]["Moves"] = " ".join(dlg.result)
+        if dlg.result is not None: self.level_moves = dlg.result
 
     def edit_tutor_moves(self):
-        if not self.moves_list:
-            messagebox.showwarning("moves", "先に rsc で moves*.txt を読み込んでください。")
-            return
-        cur = self.sec_by_id[self.current_id]["kv"].get("TutorMoves","") if self.current_id else ""
-        dlg = MovesDialog(self, [m for _,m in self.moves_list], title="教え技の編集", with_level=False, initial=[p for p in cur.split() if p.strip()])
+        moves = self.moves_list if self.moves_list else []
+        initial = getattr(self, "tutor_moves", [])
+        dlg = MovesDialog(self, moves if moves else initial, "教え技の編集", with_level=False, initial=initial)
         self.wait_window(dlg)
-        if dlg.result is not None:
-            self.sec_by_id[self.current_id]["kv"]["TutorMoves"] = " ".join(dlg.result)
+        if dlg.result is not None: self.tutor_moves = dlg.result
 
     def edit_egg_moves(self):
-        if not self.moves_list:
-            messagebox.showwarning("moves", "先に rsc で moves*.txt を読み込んでください。")
-            return
-        cur = self.sec_by_id[self.current_id]["kv"].get("EggMoves","") if self.current_id else ""
-        dlg = MovesDialog(self, [m for _,m in self.moves_list], title="タマゴ技の編集", with_level=False, initial=[p for p in cur.split() if p.strip()])
+        moves = self.moves_list if self.moves_list else []
+        initial = getattr(self, "egg_moves", [])
+        dlg = MovesDialog(self, moves if moves else initial, "タマゴ技の編集", with_level=False, initial=initial)
         self.wait_window(dlg)
-        if dlg.result is not None:
-            self.sec_by_id[self.current_id]["kv"]["EggMoves"] = " ".join(dlg.result)
+        if dlg.result is not None: self.egg_moves = dlg.result
 
     def edit_evolutions(self):
-        if not self.sections:
-            messagebox.showwarning("進化", "先に PBS を読み込んでください。"); return
-        # 候補
-        species_disp = [sid for sid,_ in self.species_pairs]  # EvoDialogはID配列でOK
-        items_ids = [k for k,_ in self.items_pairs]
-        moves_ids = [k for k,_ in self.moves_list]
-        cur = self.sec_by_id[self.current_id]["kv"].get("Evolutions","") if self.current_id else ""
-        dlg = EvoDialog(self,
-                        species_list=species_disp,
-                        items_list=items_ids,
-                        moves_list=moves_ids,
-                        title="進化の編集",
-                        initial=[p for p in cur.split() if p.strip()])
+        cur = getattr(self, "current_evolutions", "")
+        initial = [p for p in cur.split() if p.strip()] if cur else []
+        dlg = EvoDialog(self, species_list=[s.split(" —",1)[0] for s in self.species_values],
+                        items_list=[k for k,_ in self.items_pairs],
+                        moves_list=self.moves_list, title="進化の編集", initial=initial)
         self.wait_window(dlg)
-        if dlg.result is not None:
-            self.sec_by_id[self.current_id]["kv"]["Evolutions"] = " ".join(dlg.result)
+        if dlg.result is not None: self.current_evolutions = " ".join(dlg.result)
+
 
 if __name__ == "__main__":
     App().mainloop()
