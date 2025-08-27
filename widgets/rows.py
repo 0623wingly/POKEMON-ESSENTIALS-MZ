@@ -1,4 +1,4 @@
-# rows.py v1.2 — 共通行ウィジェット群（フォントとボックスサイズ連動 + Spin対応）
+# rows.py v1.2.1 — 共通行ウィジェット群（フォントとボックスサイズ連動 + Spin対応）
 # 変更点(v1.2):
 # - Spinbox 行(row_spin)と、6ステータス用スピン(row_stats_spin)を追加
 # - 最小/最大/ステップを指定でき、フォーカスアウトや入力でも自動クリップ
@@ -13,7 +13,7 @@ from tkinter import ttk
 LABEL_FONT_FAMILY = "Yu Gothic UI"
 BASE_FONT_SIZE   = 16   # ラベル
 BOX_FONT_FAMILY  = "Yu Gothic UI"
-BOX_FONT_SIZE    = 32   # 入力内部文字＆高さ
+BOX_FONT_SIZE    = 24   # 入力内部文字＆高さ
 
 __STYLES_READY = False
 __CACHE = {}
@@ -71,7 +71,14 @@ def row_text(parent, label: str, textvar: tk.StringVar, width: int = 40):
     setup_widget_styles()
     frm = ttk.Frame(parent, style="Big.TFrame")
     ttk.Label(frm, text=label, style="Big.TLabel").pack(side=tk.LEFT, padx=(0, 8))
-    ent = ttk.Entry(frm, textvariable=textvar, width=width, style="Big.TEntry")
+    # ★ font を直接指定して確実に反映させる
+    ent = ttk.Entry(
+        frm,
+        textvariable=textvar,
+        width=width,
+        style="Big.TEntry",
+        font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)  # ← 追加
+    )
     ent.pack(side=tk.LEFT, fill=tk.X, expand=True)
     return frm, ent
 
@@ -80,32 +87,54 @@ def row_number(parent, label: str, textvar: tk.StringVar, width: int = 10):
     setup_widget_styles()
     frm = ttk.Frame(parent, style="Big.TFrame")
     ttk.Label(frm, text=label, style="Big.TLabel").pack(side=tk.LEFT, padx=(0, 8))
-    ent = ttk.Entry(frm, textvariable=textvar, width=width, style="Big.TEntry")
-    ent.pack(side=tk.LEFT)
+    ent = ttk.Entry(
+        frm,
+        textvariable=textvar,
+        width=width,
+        style="Big.TEntry",
+        font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)  # ★追加：ボックス内文字サイズを直指定
+    )
+    ent.pack(side=tk.LEFT, fill=tk.X, expand=True)
     return frm, ent
-
 
 def row_combo(parent, label: str, var: tk.StringVar, values, width: int = 30, readonly: bool = True):
     setup_widget_styles()
     frm = ttk.Frame(parent, style="Big.TFrame")
     ttk.Label(frm, text=label, style="Big.TLabel").pack(side=tk.LEFT, padx=(0, 8))
     state = "readonly" if readonly else "normal"
-    cb = ttk.Combobox(frm, textvariable=var, values=values, width=width, state=state, style="Big.TCombobox")
+    cb = ttk.Combobox(
+        frm,
+        textvariable=var,
+        values=values,
+        width=width,
+        state=state,
+        style="Big.TCombobox",
+        # ★ 本体にも直にフォント指定
+        font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)
+    )
     cb.pack(side=tk.LEFT, fill=tk.X, expand=True)
-    return frm, cb
 
+    return frm, cb
 
 def row_two_combos(parent, label: str, var1: tk.StringVar, var2: tk.StringVar, values, width: int = 20, readonly: bool = True):
     setup_widget_styles()
     frm = ttk.Frame(parent, style="Big.TFrame")
     ttk.Label(frm, text=label, style="Big.TLabel").pack(side=tk.LEFT, padx=(0, 8))
     state = "readonly" if readonly else "normal"
-    cb1 = ttk.Combobox(frm, textvariable=var1, values=values, width=width, state=state, style="Big.TCombobox")
-    cb2 = ttk.Combobox(frm, textvariable=var2, values=values, width=width, state=state, style="Big.TCombobox")
+    cb1 = ttk.Combobox(
+        frm, textvariable=var1, values=values, width=width,
+        state=state, style="Big.TCombobox",
+        font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)   # ★
+    )
+    cb2 = ttk.Combobox(
+        frm, textvariable=var2, values=values, width=width,
+        state=state, style="Big.TCombobox",
+        font=(BOX_FONT_FAMILY, BOX_FONT_SIZE)   # ★
+    )
     cb1.pack(side=tk.LEFT, padx=(0, 8))
     cb2.pack(side=tk.LEFT)
-    return frm, (cb1, cb2)
 
+    return frm, (cb1, cb2)
 
 def row_stats(parent, labels, vars_):
     setup_widget_styles()
